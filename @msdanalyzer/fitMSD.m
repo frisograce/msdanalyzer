@@ -28,64 +28,48 @@ end
 if ~obj.msd_valid
     obj = obj.computeMSD;
 end
-n_spots = numel(obj.msd);
+n_spots = numel(obj.msd);    
+    
+msd_spot = obj.msd{1};
 
+t = msd_spot(:,1);
+y = msd_spot(:,2);
+std = msd_spot(:,3);
+w = 1./(std.^2);
+
+% Clip data, never take the first one dt = 0
 if clip_factor < 1
-    fprintf('Fitting %d curves of MSD = f(t), taking only the first %d%% of each curve... ',...
-        n_spots, ceil(100 * clip_factor) )
+    t_limit = 2 : round(numel(t) * clip_factor);
 else
-    fprintf('Fitting %d curves of MSD = f(t), taking only the first %d points of each curve... ',...
-        n_spots, round(clip_factor) )
+    t_limit = 2 : min(1+round(clip_factor), numel(t));
 end
+t = t(t_limit);
+y = y(t_limit);
+w = w(t_limit);
 
-a = NaN(n_spots, 1);
-b = NaN(n_spots, 1);
-r2fit = NaN(n_spots, 1);
-ft = fittype('poly1');
+% Thrash bad data
+nonnan = ~isnan(y);
+x = t(nonnan);
+y = y(nonnan);
+w = w(nonnan);
 
-fprintf('%5d/%5d', 0, n_spots);
-for i_spot = 1 : n_spots
+if numel(y) > 2
+    % Compute sums needed for linear regression with errors
+    Sxx = sum(w .* x.^2);
+    Sxy = sum(w .* x .* y);
     
-    fprintf('\b\b\b\b\b\b\b\b\b\b\b%5d/%5d', i_spot, n_spots);
+    % Compute best-fit parameters
+    a = Sxy / Sxx; % Intercept
     
-    msd_spot = obj.msd{i_spot};
-    
-    t = msd_spot(:,1);
-    y = msd_spot(:,2);
-    w = msd_spot(:,4);
-    
-    % Clip data, never take the first one dt = 0
-    if clip_factor < 1
-        t_limit = 2 : round(numel(t) * clip_factor);
-    else
-        t_limit = 2 : min(1+round(clip_factor), numel(t));
-    end
-    t = t(t_limit);
-    y = y(t_limit);
-    w = w(t_limit);
-    
-    % Thrash bad data
-    nonnan = ~isnan(y);
-    x = t(nonnan);
-    y = y(nonnan);
-    w = w(nonnan);
-    
-    if numel(y) < 2
-        continue
-    end
-    
-    [fo, gof] = fit(x, y, ft, 'Weights', w);
-    
-    a(i_spot) = fo.p1;
-    b(i_spot) = fo.p2;
-    r2fit(i_spot) = gof.adjrsquare;
-    
+    % Compute uncertainties in parameters
+    sigma_a = sqrt(1/Sxx);
+        
+    obj.lfit = struct(...
+        'a', a, ...
+        'err_a', sigma_a);
+else 
+    obj.lfit = struct(...
+        'a', NaN, ...
+        'err_a', NaN);
 end
-fprintf('\b\b\b\b\b\b\b\b\bDone.\n')
-
-obj.lfit = struct(...
-    'a', a, ...
-    'b', b, ...
-    'r2fit', r2fit);
-
 end
