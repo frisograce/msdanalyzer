@@ -1,4 +1,4 @@
-function obj = fitMSD(obj, clip_factor)
+function obj = fitMSD(obj, clip_factor, include_c)
 %%FITMSD Fit all MSD curves by a linear function.
 %
 % obj = obj.fitMSD fits all MSD curves by a straight line
@@ -23,6 +23,9 @@ function obj = fitMSD(obj, clip_factor)
 
 if nargin < 2
     clip_factor = 0.25;
+end
+if nargin < 3
+    include_c = true;
 end
 
 if ~obj.msd_valid
@@ -54,19 +57,42 @@ y = y(nonnan);
 w = w(nonnan);
 
 if numel(y) > 2
-    % Compute sums needed for linear regression with errors
-    Sxx = sum(w .* x.^2);
-    Sxy = sum(w .* x .* y);
-    
-    % Compute best-fit parameters
-    a = Sxy / Sxx; % Intercept
-    
-    % Compute uncertainties in parameters
-    sigma_a = sqrt(1/Sxx);
+    if include_c
+        hessian = [[sum(x.^2.*w), sum(x.*w)]; [sum(x.*w), sum(w)]];
+        correlation_vector = [sum(x.*y.*w); sum(y.*w)];
+        inv_hessian = inv(hessian);
+        linear_fit = hessian \ correlation_vector;
+        err_a = sqrt(inv_hessian(1, 1));
+        err_c = sqrt(inv_hessian(2, 2));
+        obj.lfit = struct(...
+            'a', linear_fit(1), ...
+            'c', linear_fit(2), ...
+            'err_a', err_a, ...
+            'err_c', err_c);
+    else
+        % Compute sums needed for linear regression with errors
+        Sxx = sum(w .* x.^2);
+        Sxy = sum(w .* x .* y);
         
-    obj.lfit = struct(...
-        'a', a, ...
-        'err_a', sigma_a);
+        % Compute best-fit parameters
+        a = Sxy / Sxx; % Intercept
+        
+        % Compute uncertainties in parameters
+        sigma_a = sqrt(1/Sxx);
+            
+        obj.lfit = struct(...
+            'a', a, ...
+            'err_a', sigma_a);
+    end
+
+    % figure
+    % hold on
+    % plot(t, y, Color= "#4477AA",DisplayName="Data", LineWidth=3)
+    % patch('XData', [t; flip(t)], 'YData', [y-std; flip(y+std)], 'FaceAlpha',0.25, 'EdgeColor','none', FaceColor="#4477AA")
+    % xlabel("Lag time (s)")
+    % ylabel("MSD (µm)")
+    % fontsize(gca, 24, "points")
+
 else 
     obj.lfit = struct(...
         'a', NaN, ...
