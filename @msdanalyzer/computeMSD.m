@@ -90,7 +90,7 @@ for i = 1 : n_tracks
     end
     
     n_msd(1) = n_detections;
-    std_msd = sqrt( M2_msd2 ./ n_msd ) ;
+    std_msd = sqrt( M2_msd2 ./ ((n_msd-1) .*n_msd)) ;
     
     % We replace points for which N=0 by Nan, to later treat
     % then as missing data. Indeed, for each msd cell, all the
